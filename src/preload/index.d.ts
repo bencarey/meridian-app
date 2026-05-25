@@ -6,6 +6,7 @@ declare global {
     api: {
       setPlaying: (isPlaying: boolean) => void
       hideWindow: () => void
+      onStopAudio: (cb: () => void) => void
     }
   }
 }

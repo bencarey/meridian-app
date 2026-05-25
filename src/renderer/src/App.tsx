@@ -34,6 +34,15 @@ function App(): React.JSX.Element {
   const audio = useAudioEngine()
   const timer = useTimer()
 
+  // Stop audio when window is hidden to tray
+  useEffect(() => {
+    window.api?.onStopAudio(() => {
+      audio.stop()
+      timer.resetTimer()
+      window.api?.setPlaying(false)
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const activePreset: Preset = PRESETS[activePresetId]
 
   // Idle detection

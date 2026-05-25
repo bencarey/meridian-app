@@ -110,10 +110,11 @@ function createWindow(): void {
     mainWindow!.show()
   })
 
-  // Hide to tray instead of closing on macOS
+  // Hide to tray instead of closing on macOS — stop audio first
   mainWindow.on('close', (event) => {
     if (!forceQuit && process.platform === 'darwin') {
       event.preventDefault()
+      mainWindow!.webContents.send('stop-audio')
       mainWindow!.hide()
       app.dock?.hide()
     }

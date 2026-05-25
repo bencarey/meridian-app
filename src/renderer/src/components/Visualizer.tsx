@@ -12,6 +12,7 @@ interface VisualizerProps {
   accentColor: string
   particleColor: string
   isPlaying: boolean
+  geometrySpeed?: number
   onTick?: () => void
 }
 
@@ -130,7 +131,7 @@ function drawMetatronLines(
 }
 
 export function Visualizer({
-  bgColor, orbColor, accentColor, particleColor, isPlaying, onTick
+  bgColor, orbColor, accentColor, particleColor, isPlaying, geometrySpeed = 1.0, onTick
 }: VisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const timeRef = useRef(0)
@@ -144,6 +145,7 @@ export function Visualizer({
   const accentColorRef = useRef(accentColor)
   const particleColorRef = useRef(particleColor)
   const isPlayingRef = useRef(isPlaying)
+  const geometrySpeedRef = useRef(geometrySpeed)
   const onTickRef = useRef(onTick)
 
   bgColorRef.current = bgColor
@@ -151,6 +153,7 @@ export function Visualizer({
   accentColorRef.current = accentColor
   particleColorRef.current = particleColor
   isPlayingRef.current = isPlaying
+  geometrySpeedRef.current = geometrySpeed
   onTickRef.current = onTick
 
   useEffect(() => {
@@ -198,6 +201,7 @@ export function Visualizer({
       const cx = W / 2
       const cy = H / 2
       const base = Math.min(W, H) * 0.36
+      const spd = geometrySpeedRef.current
 
       // Gentle breathe when playing
       const breathe = 1 + (playing ? 0.022 * Math.sin(t * 0.65) : 0)
@@ -248,14 +252,14 @@ export function Visualizer({
       const metA = elementAlpha(bp, 0.20, 0.18) * 0.07
       const metReveal = Math.max(0, Math.min(1, (bp - 0.22) / 0.20))
       if (metA > 0.003) {
-        drawMetatronLines(ctx, cx, cy, folR, t * 0.012, '#ffffff', metA, metReveal)
+        drawMetatronLines(ctx, cx, cy, folR, t * 0.012 * spd, '#ffffff', metA, metReveal)
       }
 
       // ── FLOWER OF LIFE ──────────────────────────────────────────────────
       const folA = elementAlpha(bp, 0.08, 0.14) * 0.18
       const folReveal = Math.max(0, Math.min(1, (bp - 0.08) / 0.16))
       if (folA > 0.003) {
-        drawFlowerOfLife(ctx, cx, cy, folR, t * 0.012, orb, folA, folReveal)
+        drawFlowerOfLife(ctx, cx, cy, folR, t * 0.012 * spd, orb, folA, folReveal)
       }
 
       // ── GOLDEN RATIO RINGS ──────────────────────────────────────────────
@@ -285,7 +289,7 @@ export function Visualizer({
         ctx.shadowColor = rgba(accent, d12A * 0.25)
         ctx.strokeStyle = rgba(accent, d12A * 0.30)
         ctx.lineWidth = 0.8
-        drawPolygon(ctx, cx, cy, 12, B, t * 0.007)
+        drawPolygon(ctx, cx, cy, 12, B, t * 0.007 * spd)
         ctx.stroke()
         ctx.shadowBlur = 0
       }
@@ -297,9 +301,9 @@ export function Visualizer({
         ctx.shadowColor = rgba(accent, hexA * 0.5)
         ctx.strokeStyle = rgba(accent, hexA * 0.55)
         ctx.lineWidth = 1.1
-        drawPolygon(ctx, cx, cy, 3, B * 0.70, t * 0.014)
+        drawPolygon(ctx, cx, cy, 3, B * 0.70, t * 0.014 * spd)
         ctx.stroke()
-        drawPolygon(ctx, cx, cy, 3, B * 0.70, -t * 0.011 + Math.PI / 3)
+        drawPolygon(ctx, cx, cy, 3, B * 0.70, -t * 0.011 * spd + Math.PI / 3)
         ctx.stroke()
         ctx.shadowBlur = 0
       }
@@ -311,7 +315,7 @@ export function Visualizer({
         ctx.shadowColor = rgba(accent, pentA * 0.35)
         ctx.strokeStyle = rgba(accent, pentA * 0.42)
         ctx.lineWidth = 0.9
-        drawPolygon(ctx, cx, cy, 5, B * 0.53, -t * 0.020)
+        drawPolygon(ctx, cx, cy, 5, B * 0.53, -t * 0.020 * spd)
         ctx.stroke()
         ctx.shadowBlur = 0
       }
@@ -323,7 +327,7 @@ export function Visualizer({
         ctx.shadowColor = rgba(accent, octA * 0.25)
         ctx.strokeStyle = rgba(accent, octA * 0.33)
         ctx.lineWidth = 0.8
-        drawPolygon(ctx, cx, cy, 8, B * 0.40, t * 0.017)
+        drawPolygon(ctx, cx, cy, 8, B * 0.40, t * 0.017 * spd)
         ctx.stroke()
         ctx.shadowBlur = 0
       }
@@ -335,7 +339,7 @@ export function Visualizer({
         ctx.shadowColor = rgba(accent, triA * 0.7)
         ctx.strokeStyle = rgba(accent, triA * 0.75)
         ctx.lineWidth = 1.4
-        drawPolygon(ctx, cx, cy, 3, B * 0.26, t * 0.028)
+        drawPolygon(ctx, cx, cy, 3, B * 0.26, t * 0.028 * spd)
         ctx.stroke()
         ctx.shadowBlur = 0
       }
@@ -346,7 +350,7 @@ export function Visualizer({
         ctx.strokeStyle = rgba(accent, crossA)
         ctx.lineWidth = 0.5
         for (let i = 0; i < 12; i++) {
-          const angle = (i / 12) * Math.PI * 2 + t * 0.006
+          const angle = (i / 12) * Math.PI * 2 + t * 0.006 * spd
           ctx.beginPath()
           ctx.moveTo(cx, cy)
           ctx.lineTo(cx + B * 0.92 * Math.cos(angle), cy + B * 0.92 * Math.sin(angle))

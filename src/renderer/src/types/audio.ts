@@ -1,4 +1,4 @@
-export type PresetId = 'deep-focus' | 'flow-state' | 'creative' | 'power';
+export type PresetId = 'deep-focus' | 'flow-state' | 'creative' | 'power' | 'build';
 export type DurationOption = 25 | 45 | 60 | 90 | null;
 
 export interface Preset {
@@ -13,6 +13,7 @@ export interface Preset {
   droneHz?: number;
   scale: number[];     // frequencies in Hz
   rootNote: number;    // root note freq for sub-bass
+  geometrySpeed?: number; // multiplier for visualizer rotation speed, default 1.0
   bgColor: string;
   orbColor: string;
   accentColor: string;
@@ -88,6 +89,24 @@ export const PRESETS: Record<PresetId, Preset> = {
     accentColor: '#FF7043',
     particleColor: 'rgba(255,112,67,0.5)',
   },
+  'build': {
+    id: 'build',
+    name: 'BUILD',
+    label: 'BUILD',
+    description: 'Gamma waves for intense technical focus',
+    binauralHz: 40,
+    carrierLeft: 200,
+    carrierRight: 240,
+    noiseType: 'brown',
+    droneHz: 65.41,  // C2 — deep, grounding
+    scale: [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25],
+    rootNote: 130.81,
+    geometrySpeed: 1.55,
+    bgColor: '#06090E',
+    orbColor: '#0A2038',
+    accentColor: '#00B4D8',
+    particleColor: 'rgba(0,180,216,0.5)',
+  },
 };
 
-export const PRESET_ORDER: PresetId[] = ['deep-focus', 'flow-state', 'creative', 'power'];
+export const PRESET_ORDER: PresetId[] = ['deep-focus', 'flow-state', 'creative', 'power', 'build'];

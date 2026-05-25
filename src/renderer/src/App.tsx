@@ -139,9 +139,11 @@ function App(): React.JSX.Element {
     if (audio.isPlaying) {
       audio.stop()
       timer.resetTimer()
+      window.api?.setPlaying(false)
     } else {
       await audio.start(activePreset, volume)
       timer.startTimer(activeDuration)
+      window.api?.setPlaying(true)
     }
   }, [audio, timer, activePreset, volume, activeDuration])
 
@@ -170,6 +172,7 @@ function App(): React.JSX.Element {
         accentColor={accentColor}
         particleColor={particleColor}
         isPlaying={audio.isPlaying}
+        geometrySpeed={activePreset.geometrySpeed ?? 1.0}
         onTick={onVisualizerTick}
       />
 

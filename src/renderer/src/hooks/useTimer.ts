@@ -4,7 +4,8 @@ import { DurationOption } from '../types/audio'
 interface TimerState {
   secondsRemaining: number | null
   progress: number
-  startTimer: (durationMinutes: DurationOption) => void
+  startTimer: (durationMinutes: DurationOption, onComplete?: () => void) => void
+  startTimerSeconds: (seconds: number, onComplete?: () => void) => void
   resetTimer: () => void
 }
 
@@ -15,6 +16,7 @@ export function useTimer(): TimerState {
   const endTimeRef = useRef<number | null>(null)
   const totalSecondsRef = useRef<number | null>(null)
   const rafRef = useRef<number | null>(null)
+  const onCompleteRef = useRef<(() => void) | undefined>(undefined)
 
   const tick = useCallback(() => {
     if (endTimeRef.current === null || totalSecondsRef.current === null) return
@@ -22,8 +24,7 @@ export function useTimer(): TimerState {
     const now = Date.now()
     const remaining = Math.max(0, Math.ceil((endTimeRef.current - now) / 1000))
     const total = totalSecondsRef.current
-    const elapsed = total - remaining
-    const prog = total > 0 ? elapsed / total : 0
+    const prog = total > 0 ? (total - remaining) / total : 0
 
     setSecondsRemaining(remaining)
     setProgress(prog)
@@ -33,18 +34,38 @@ export function useTimer(): TimerState {
     } else {
       endTimeRef.current = null
       totalSecondsRef.current = null
+      const cb = onCompleteRef.current
+      onCompleteRef.current = undefined
+      cb?.()
     }
   }, [])
 
+  const startTimerSeconds = useCallback(
+    (seconds: number, onComplete?: () => void) => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
+      onCompleteRef.current = onComplete
+      const end = Date.now() + seconds * 1000
+      endTimeRef.current = end
+      totalSecondsRef.current = seconds
+      setSecondsRemaining(seconds)
+      setProgress(0)
+      rafRef.current = requestAnimationFrame(tick)
+    },
+    [tick]
+  )
+
   const startTimer = useCallback(
-    (durationMinutes: DurationOption) => {
+    (durationMinutes: DurationOption, onComplete?: () => void) => {
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current)
         rafRef.current = null
       }
 
-      if (durationMinutes === null) {
-        // Infinite session
+      if (durationMinutes === null || durationMinutes === 'meeting') {
+        onCompleteRef.current = undefined
         endTimeRef.current = null
         totalSecondsRef.current = null
         setSecondsRemaining(null)
@@ -52,15 +73,9 @@ export function useTimer(): TimerState {
         return
       }
 
-      const totalSeconds = durationMinutes * 60
-      const end = Date.now() + totalSeconds * 1000
-      endTimeRef.current = end
-      totalSecondsRef.current = totalSeconds
-      setSecondsRemaining(totalSeconds)
-      setProgress(0)
-      rafRef.current = requestAnimationFrame(tick)
+      startTimerSeconds(durationMinutes * 60, onComplete)
     },
-    [tick]
+    [startTimerSeconds]
   )
 
   const resetTimer = useCallback(() => {
@@ -68,6 +83,7 @@ export function useTimer(): TimerState {
       cancelAnimationFrame(rafRef.current)
       rafRef.current = null
     }
+    onCompleteRef.current = undefined
     endTimeRef.current = null
     totalSecondsRef.current = null
     setSecondsRemaining(null)
@@ -76,11 +92,9 @@ export function useTimer(): TimerState {
 
   useEffect(() => {
     return () => {
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current)
-      }
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
     }
   }, [])
 
-  return { secondsRemaining, progress, startTimer, resetTimer }
+  return { secondsRemaining, progress, startTimer, startTimerSeconds, resetTimer }
 }

@@ -6,6 +6,8 @@ interface Particle {
   x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number
 }
 
+type GeometryVariant = 'triangles' | 'circles' | 'mandala' | 'crystalline' | 'grid'
+
 interface VisualizerProps {
   bgColor: string
   orbColor: string
@@ -13,6 +15,7 @@ interface VisualizerProps {
   particleColor: string
   isPlaying: boolean
   geometrySpeed?: number
+  geometryVariant?: GeometryVariant
   onTick?: () => void
 }
 
@@ -27,7 +30,6 @@ function rgba(hex: string, a: number): string {
   return `rgba(${r},${g},${b},${Math.max(0, a)})`
 }
 
-// Smooth ease-in for element reveal
 function easeIn(t: number): number {
   const c = Math.max(0, Math.min(1, t))
   return c * c
@@ -53,7 +55,8 @@ function drawPolygon(
   ctx.closePath()
 }
 
-// Flower of Life — reveal circles one by one as revealFraction goes 0→1
+// ── SHARED HELPERS ───────────────────────────────────────────────────────────
+
 function drawFlowerOfLife(
   ctx: CanvasRenderingContext2D,
   cx: number, cy: number,
@@ -64,31 +67,25 @@ function drawFlowerOfLife(
   ctx.strokeStyle = rgba(color, alpha)
   ctx.lineWidth = 0.6
   ctx.setLineDash([])
-
   const total = 7
   const count = Math.min(total, Math.floor(revealFraction * total) + 1)
   const partial = (revealFraction * total) % 1
-
   for (let i = 0; i < count; i++) {
     let arcEnd = Math.PI * 2
     if (i === count - 1 && revealFraction < 1) arcEnd = partial * Math.PI * 2
-
     if (i === 0) {
       ctx.beginPath()
       ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + arcEnd)
       ctx.stroke()
     } else {
       const angle = ((i - 1) / 6) * Math.PI * 2 + rotation
-      const ox = cx + r * Math.cos(angle)
-      const oy = cy + r * Math.sin(angle)
       ctx.beginPath()
-      ctx.arc(ox, oy, r, -Math.PI / 2, -Math.PI / 2 + arcEnd)
+      ctx.arc(cx + r * Math.cos(angle), cy + r * Math.sin(angle), r, -Math.PI / 2, -Math.PI / 2 + arcEnd)
       ctx.stroke()
     }
   }
 }
 
-// Metatron's Cube — progressively reveal lines between all 13 circle centers
 function drawMetatronLines(
   ctx: CanvasRenderingContext2D,
   cx: number, cy: number,
@@ -96,31 +93,25 @@ function drawMetatronLines(
   color: string, alpha: number, revealFraction: number
 ): void {
   if (alpha <= 0.005) return
-
   const nodes: [number, number][] = [[cx, cy]]
   for (let i = 0; i < 6; i++) {
     const angle = (i / 6) * Math.PI * 2 + rotation
     nodes.push([cx + r * Math.cos(angle), cy + r * Math.sin(angle)])
   }
-  // Outer ring at 2r, offset by 30°
   for (let i = 0; i < 6; i++) {
     const angle = (i / 6) * Math.PI * 2 + rotation + Math.PI / 6
     nodes.push([cx + r * 1.95 * Math.cos(angle), cy + r * 1.95 * Math.sin(angle)])
   }
-
-  // Build all pairs
   const pairs: [[number, number], [number, number]][] = []
   for (let i = 0; i < nodes.length; i++) {
     for (let j = i + 1; j < nodes.length; j++) {
       pairs.push([nodes[i], nodes[j]])
     }
   }
-
   const linesToDraw = Math.floor(revealFraction * pairs.length)
   ctx.strokeStyle = rgba(color, alpha)
   ctx.lineWidth = 0.4
   ctx.setLineDash([])
-
   for (let k = 0; k < linesToDraw; k++) {
     const [a, b] = pairs[k]
     ctx.beginPath()
@@ -130,8 +121,608 @@ function drawMetatronLines(
   }
 }
 
+// ── VARIANT: TRIANGLES (deep-focus) — Sri Yantra–inspired nested triangles ──
+
+function drawTrianglesVariant(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  B: number, t: number, spd: number,
+  accent: string, orb: string,
+  bp: number
+): void {
+  // 5 nested triangle pairs (up + down), innermost brightest — bindu build
+  const pairs = 5
+  for (let i = 0; i < pairs; i++) {
+    const revThreshold = 0.08 + i * 0.12
+    const a = elementAlpha(bp, revThreshold, 0.14)
+    if (a < 0.01) continue
+
+    const r = B * (0.68 - i * 0.11)
+    const rotUp = t * (0.006 + i * 0.002) * spd
+    const rotDn = -t * (0.005 + i * 0.002) * spd + Math.PI
+
+    const brightness = 0.25 + i * 0.12
+    ctx.shadowBlur = 8 + i * 4
+    ctx.shadowColor = rgba(accent, a * 0.5)
+    ctx.strokeStyle = rgba(accent, a * brightness)
+    ctx.lineWidth = 0.7 + i * 0.15
+
+    drawPolygon(ctx, cx, cy, 3, r, rotUp)
+    ctx.stroke()
+    drawPolygon(ctx, cx, cy, 3, r * 0.92, rotDn)
+    ctx.stroke()
+  }
+  ctx.shadowBlur = 0
+
+  // Metatron overlay — faint, builds mid-late
+  const metA = elementAlpha(bp, 0.55, 0.20) * 0.06
+  const metReveal = Math.max(0, Math.min(1, (bp - 0.55) / 0.22))
+  if (metA > 0.003) {
+    drawMetatronLines(ctx, cx, cy, B * 0.22, t * 0.010 * spd, '#ffffff', metA, metReveal)
+  }
+
+  // Golden rings
+  const ringA = elementAlpha(bp, 0.55, 0.14)
+  if (ringA > 0.01) {
+    ctx.shadowBlur = 8
+    ctx.shadowColor = rgba(accent, ringA * 0.25);
+    [B, B / PHI, B / (PHI * PHI)].forEach((r, i) => {
+      const a = ringA * (1 - i * 0.25) * 0.28
+      if (a < 0.006) return
+      ctx.strokeStyle = rgba(accent, a)
+      ctx.lineWidth = 0.6
+      ctx.setLineDash([])
+      ctx.beginPath()
+      ctx.arc(cx, cy, r, 0, Math.PI * 2)
+      ctx.stroke()
+    })
+    ctx.shadowBlur = 0
+  }
+
+  // Bindu (center point) — last to appear, pulses
+  const dotA = elementAlpha(bp, 0.82, 0.12)
+  if (dotA > 0.01) {
+    const pulse = 1 + 0.5 * Math.sin(t * 1.4) * dotA
+    ctx.shadowBlur = 24 * dotA
+    ctx.shadowColor = rgba(accent, 0.9)
+    ctx.fillStyle = rgba(accent, dotA * 0.95)
+    ctx.beginPath()
+    ctx.arc(cx, cy, 3 * pulse, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.shadowBlur = 0
+  }
+}
+
+// ── VARIANT: CIRCLES (flow-state) — Vesica Piscis / Flower of Life ──────────
+
+function drawCirclesVariant(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  B: number, t: number, spd: number,
+  accent: string, orb: string,
+  bp: number
+): void {
+  const folR = B * 0.25
+
+  // Outer hexagon
+  const hexA = elementAlpha(bp, 0.06, 0.12)
+  if (hexA > 0.01) {
+    ctx.strokeStyle = rgba(accent, hexA * 0.22)
+    ctx.lineWidth = 0.7
+    ctx.setLineDash([])
+    drawPolygon(ctx, cx, cy, 6, B * 0.92, t * 0.005 * spd)
+    ctx.stroke()
+  }
+
+  // Flower of Life — primary element, reveals early
+  const folA = elementAlpha(bp, 0.06, 0.18) * 0.32
+  const folReveal = Math.max(0, Math.min(1, (bp - 0.06) / 0.20))
+  if (folA > 0.003) {
+    drawFlowerOfLife(ctx, cx, cy, folR, t * 0.010 * spd, orb, folA, folReveal)
+  }
+
+  // Vesica piscis overlapping rings at golden ratio distances
+  const vA = elementAlpha(bp, 0.28, 0.14) * 0.18
+  if (vA > 0.005) {
+    ctx.strokeStyle = rgba(accent, vA)
+    ctx.lineWidth = 0.5
+    ctx.setLineDash([])
+    const offsets = [folR, folR * PHI]
+    for (const off of offsets) {
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2 + t * 0.008 * spd
+        ctx.beginPath()
+        ctx.arc(cx + off * Math.cos(angle), cy + off * Math.sin(angle), folR, 0, Math.PI * 2)
+        ctx.stroke()
+      }
+    }
+  }
+
+  // Inner hexagram
+  const stA = elementAlpha(bp, 0.44, 0.14)
+  if (stA > 0.01) {
+    ctx.shadowBlur = 12
+    ctx.shadowColor = rgba(accent, stA * 0.45)
+    ctx.strokeStyle = rgba(accent, stA * 0.50)
+    ctx.lineWidth = 1.0
+    ctx.setLineDash([])
+    drawPolygon(ctx, cx, cy, 3, B * 0.45, t * 0.012 * spd)
+    ctx.stroke()
+    drawPolygon(ctx, cx, cy, 3, B * 0.45, -t * 0.009 * spd + Math.PI / 3)
+    ctx.stroke()
+    ctx.shadowBlur = 0
+  }
+
+  // Concentric circles — breathing
+  const concA = elementAlpha(bp, 0.58, 0.14)
+  if (concA > 0.01) {
+    ctx.shadowBlur = 6
+    ctx.shadowColor = rgba(accent, concA * 0.3);
+    [B, B / PHI, B / (PHI * PHI), B / (PHI * PHI * PHI)].forEach((r, i) => {
+      const a = concA * (1 - i * 0.2) * 0.32
+      if (a < 0.006) return
+      ctx.strokeStyle = rgba(accent, a)
+      ctx.lineWidth = 0.6
+      ctx.setLineDash([])
+      ctx.beginPath()
+      ctx.arc(cx, cy, r, 0, Math.PI * 2)
+      ctx.stroke()
+    })
+    ctx.shadowBlur = 0
+  }
+
+  // 12 radial lines
+  const rayA = elementAlpha(bp, 0.70, 0.12) * 0.22
+  if (rayA > 0.005) {
+    ctx.strokeStyle = rgba(accent, rayA)
+    ctx.lineWidth = 0.4
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2 + t * 0.004 * spd
+      ctx.beginPath()
+      ctx.moveTo(cx, cy)
+      ctx.lineTo(cx + B * 0.88 * Math.cos(angle), cy + B * 0.88 * Math.sin(angle))
+      ctx.stroke()
+    }
+  }
+
+  // Center dot
+  const dotA = elementAlpha(bp, 0.82, 0.12)
+  if (dotA > 0.01) {
+    const pulse = 1 + 0.35 * Math.sin(t * 1.1) * dotA
+    ctx.shadowBlur = 20 * dotA
+    ctx.shadowColor = rgba(accent, 0.9)
+    ctx.fillStyle = rgba(accent, dotA * 0.95)
+    ctx.beginPath()
+    ctx.arc(cx, cy, 3.5 * pulse, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.shadowBlur = 0
+  }
+}
+
+// ── VARIANT: MANDALA (creative) — petal rings ────────────────────────────────
+
+function drawPetalRing(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  petalCount: number, innerR: number, outerR: number,
+  rotation: number, color: string, alpha: number
+): void {
+  if (alpha < 0.005) return
+  ctx.strokeStyle = rgba(color, alpha)
+  ctx.setLineDash([])
+  for (let i = 0; i < petalCount; i++) {
+    const angle = (i / petalCount) * Math.PI * 2 + rotation
+    const next = ((i + 1) / petalCount) * Math.PI * 2 + rotation
+    const midAngle = (angle + next) / 2
+
+    const ax = cx + innerR * Math.cos(angle)
+    const ay = cy + innerR * Math.sin(angle)
+    const bx = cx + innerR * Math.cos(next)
+    const by = cy + innerR * Math.sin(next)
+    const tip = outerR
+    const tipX = cx + tip * Math.cos(midAngle)
+    const tipY = cy + tip * Math.sin(midAngle)
+
+    const cpDist = (outerR - innerR) * 0.55
+    ctx.beginPath()
+    ctx.moveTo(ax, ay)
+    ctx.quadraticCurveTo(tipX + cpDist * Math.cos(midAngle + Math.PI / 2), tipY + cpDist * Math.sin(midAngle + Math.PI / 2), tipX, tipY)
+    ctx.quadraticCurveTo(tipX + cpDist * Math.cos(midAngle - Math.PI / 2), tipY + cpDist * Math.sin(midAngle - Math.PI / 2), bx, by)
+    ctx.stroke()
+  }
+}
+
+function drawMandalaVariant(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  B: number, t: number, spd: number,
+  accent: string, orb: string,
+  bp: number
+): void {
+  // Outer ring: 12 petals
+  const r3A = elementAlpha(bp, 0.08, 0.16)
+  if (r3A > 0.01) {
+    ctx.lineWidth = 0.6
+    ctx.shadowBlur = 6
+    ctx.shadowColor = rgba(accent, r3A * 0.3)
+    drawPetalRing(ctx, cx, cy, 12, B * 0.55, B * 0.88, t * 0.004 * spd, accent, r3A * 0.28)
+    ctx.shadowBlur = 0
+  }
+
+  // Middle ring: 8 petals
+  const r2A = elementAlpha(bp, 0.20, 0.16)
+  if (r2A > 0.01) {
+    ctx.lineWidth = 0.7
+    ctx.shadowBlur = 8
+    ctx.shadowColor = rgba(accent, r2A * 0.35)
+    drawPetalRing(ctx, cx, cy, 8, B * 0.32, B * 0.58, -t * 0.007 * spd, accent, r2A * 0.40)
+    ctx.shadowBlur = 0
+  }
+
+  // Inner ring: 6 petals
+  const r1A = elementAlpha(bp, 0.34, 0.16)
+  if (r1A > 0.01) {
+    ctx.lineWidth = 0.9
+    ctx.shadowBlur = 12
+    ctx.shadowColor = rgba(accent, r1A * 0.45)
+    drawPetalRing(ctx, cx, cy, 6, B * 0.14, B * 0.34, t * 0.011 * spd, accent, r1A * 0.52)
+    ctx.shadowBlur = 0
+  }
+
+  // Metatron faint overlay
+  const metA = elementAlpha(bp, 0.44, 0.18) * 0.07
+  const metReveal = Math.max(0, Math.min(1, (bp - 0.44) / 0.20))
+  if (metA > 0.003) {
+    drawMetatronLines(ctx, cx, cy, B * 0.22, t * 0.008 * spd, '#ffffff', metA, metReveal)
+  }
+
+  // Two concentric decorative rings
+  const circA = elementAlpha(bp, 0.56, 0.14)
+  if (circA > 0.01) {
+    ctx.shadowBlur = 8
+    ctx.shadowColor = rgba(accent, circA * 0.3)
+    ctx.setLineDash([])
+    ctx.strokeStyle = rgba(accent, circA * 0.30)
+    ctx.lineWidth = 0.7
+    ctx.beginPath(); ctx.arc(cx, cy, B * 0.90, 0, Math.PI * 2); ctx.stroke()
+    ctx.strokeStyle = rgba(accent, circA * 0.18)
+    ctx.lineWidth = 0.5
+    ctx.beginPath(); ctx.arc(cx, cy, B * 0.52, 0, Math.PI * 2); ctx.stroke()
+    ctx.shadowBlur = 0
+  }
+
+  // Hexagram
+  const hexA = elementAlpha(bp, 0.66, 0.12)
+  if (hexA > 0.01) {
+    ctx.shadowBlur = 14
+    ctx.shadowColor = rgba(accent, hexA * 0.5)
+    ctx.strokeStyle = rgba(accent, hexA * 0.55)
+    ctx.lineWidth = 1.0
+    ctx.setLineDash([])
+    drawPolygon(ctx, cx, cy, 3, B * 0.28, t * 0.013 * spd)
+    ctx.stroke()
+    drawPolygon(ctx, cx, cy, 3, B * 0.28, -t * 0.010 * spd + Math.PI / 3)
+    ctx.stroke()
+    ctx.shadowBlur = 0
+  }
+
+  // 24 fine radial lines
+  const rayA = elementAlpha(bp, 0.74, 0.12) * 0.18
+  if (rayA > 0.005) {
+    ctx.strokeStyle = rgba(accent, rayA)
+    ctx.lineWidth = 0.35
+    for (let i = 0; i < 24; i++) {
+      const angle = (i / 24) * Math.PI * 2 + t * 0.003 * spd
+      ctx.beginPath()
+      ctx.moveTo(cx + B * 0.14 * Math.cos(angle), cy + B * 0.14 * Math.sin(angle))
+      ctx.lineTo(cx + B * 0.90 * Math.cos(angle), cy + B * 0.90 * Math.sin(angle))
+      ctx.stroke()
+    }
+  }
+
+  // Center dot
+  const dotA = elementAlpha(bp, 0.84, 0.12)
+  if (dotA > 0.01) {
+    const pulse = 1 + 0.45 * Math.sin(t * 1.6) * dotA
+    ctx.shadowBlur = 20 * dotA
+    ctx.shadowColor = rgba(accent, 0.9)
+    ctx.fillStyle = rgba(accent, dotA * 0.95)
+    ctx.beginPath()
+    ctx.arc(cx, cy, 3 * pulse, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.shadowBlur = 0
+  }
+}
+
+// ── VARIANT: CRYSTALLINE (power) — 3D octahedron ─────────────────────────────
+
+function projectOcta(
+  vx: number, vy: number, vz: number,
+  cx: number, cy: number, scale: number,
+  rotX: number, rotY: number
+): [number, number, number] {
+  // Rotate around Y axis
+  const cosY = Math.cos(rotY), sinY = Math.sin(rotY)
+  let x1 = vx * cosY - vz * sinY
+  let z1 = vx * sinY + vz * cosY
+  let y1 = vy
+  // Rotate around X axis
+  const cosX = Math.cos(rotX), sinX = Math.sin(rotX)
+  const y2 = y1 * cosX - z1 * sinX
+  const z2 = y1 * sinX + z1 * cosX
+  const x2 = x1
+  return [cx + x2 * scale, cy + y2 * scale, z2]
+}
+
+function drawCrystallineVariant(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  B: number, t: number, spd: number,
+  accent: string, orb: string,
+  bp: number
+): void {
+  // Outer circle + 12-gon
+  const outerA = elementAlpha(bp, 0.06, 0.12)
+  if (outerA > 0.01) {
+    ctx.strokeStyle = rgba(accent, outerA * 0.22)
+    ctx.lineWidth = 0.7
+    ctx.setLineDash([])
+    ctx.beginPath(); ctx.arc(cx, cy, B, 0, Math.PI * 2); ctx.stroke()
+    drawPolygon(ctx, cx, cy, 12, B, t * 0.005 * spd)
+    ctx.stroke()
+  }
+
+  // Octahedron — 6 vertices at ±1 on each axis
+  const rotY = t * 0.022 * spd
+  const rotX = t * 0.014 * spd + 0.5
+
+  const verts: [number, number, number][] = [
+    [0, -1, 0], [0, 1, 0],  // top, bottom
+    [1, 0, 0], [-1, 0, 0],  // right, left
+    [0, 0, 1], [0, 0, -1],  // front, back
+  ]
+
+  const edges: [number, number][] = [
+    [0,2],[0,3],[0,4],[0,5],
+    [1,2],[1,3],[1,4],[1,5],
+    [2,4],[4,3],[3,5],[5,2],
+  ]
+
+  const scale = B * 0.50
+  const octA = elementAlpha(bp, 0.18, 0.20)
+
+  if (octA > 0.01) {
+    const projected = verts.map(([vx, vy, vz]) => projectOcta(vx, vy, vz, cx, cy, scale, rotX, rotY))
+
+    ctx.setLineDash([])
+    // Draw back edges first (negative z), then front
+    const backEdges = edges.filter(([a, b]) => projected[a][2] < 0 || projected[b][2] < 0)
+    const frontEdges = edges.filter(([a, b]) => projected[a][2] >= 0 && projected[b][2] >= 0)
+
+    ctx.shadowBlur = 0
+    for (const [a, b] of backEdges) {
+      ctx.strokeStyle = rgba(accent, octA * 0.18)
+      ctx.lineWidth = 0.5
+      ctx.beginPath()
+      ctx.moveTo(projected[a][0], projected[a][1])
+      ctx.lineTo(projected[b][0], projected[b][1])
+      ctx.stroke()
+    }
+    ctx.shadowBlur = 12
+    ctx.shadowColor = rgba(accent, octA * 0.45)
+    for (const [a, b] of frontEdges) {
+      ctx.strokeStyle = rgba(accent, octA * 0.75)
+      ctx.lineWidth = 1.2
+      ctx.beginPath()
+      ctx.moveTo(projected[a][0], projected[a][1])
+      ctx.lineTo(projected[b][0], projected[b][1])
+      ctx.stroke()
+    }
+    ctx.shadowBlur = 0
+
+    // Vertex dots
+    const dotBaseA = octA * 0.85
+    for (const [px, py, pz] of projected) {
+      const front = pz >= 0
+      ctx.shadowBlur = front ? 10 : 0
+      ctx.shadowColor = rgba(accent, 0.8)
+      ctx.fillStyle = rgba(accent, front ? dotBaseA : dotBaseA * 0.25)
+      ctx.beginPath()
+      ctx.arc(px, py, front ? 2.5 : 1.5, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    ctx.shadowBlur = 0
+  }
+
+  // Inner nested octahedron (smaller, rotates opposite)
+  const innerA = elementAlpha(bp, 0.42, 0.18)
+  if (innerA > 0.01) {
+    const rotY2 = -t * 0.018 * spd
+    const rotX2 = t * 0.010 * spd + 1.0
+    const scale2 = B * 0.26
+    const projected2 = verts.map(([vx, vy, vz]) => projectOcta(vx, vy, vz, cx, cy, scale2, rotX2, rotY2))
+    ctx.shadowBlur = 8
+    ctx.shadowColor = rgba(accent, innerA * 0.4)
+    for (const [a, b] of edges) {
+      const avgZ = (projected2[a][2] + projected2[b][2]) / 2
+      ctx.strokeStyle = rgba(accent, innerA * (avgZ >= 0 ? 0.55 : 0.12))
+      ctx.lineWidth = 0.7
+      ctx.setLineDash([])
+      ctx.beginPath()
+      ctx.moveTo(projected2[a][0], projected2[a][1])
+      ctx.lineTo(projected2[b][0], projected2[b][1])
+      ctx.stroke()
+    }
+    ctx.shadowBlur = 0
+  }
+
+  // Spiky radial lines (8 directions — power theme)
+  const spikeA = elementAlpha(bp, 0.62, 0.14) * 0.30
+  if (spikeA > 0.005) {
+    ctx.strokeStyle = rgba(accent, spikeA)
+    ctx.lineWidth = 0.5
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2 + t * 0.010 * spd
+      ctx.beginPath()
+      ctx.moveTo(cx, cy)
+      ctx.lineTo(cx + B * 0.95 * Math.cos(angle), cy + B * 0.95 * Math.sin(angle))
+      ctx.stroke()
+    }
+  }
+
+  // Golden ratio rings — brief
+  const ringA = elementAlpha(bp, 0.70, 0.12)
+  if (ringA > 0.01) {
+    ctx.shadowBlur = 6
+    ctx.shadowColor = rgba(accent, ringA * 0.2)
+    ctx.strokeStyle = rgba(accent, ringA * 0.22)
+    ctx.lineWidth = 0.5
+    ctx.setLineDash([])
+    ctx.beginPath(); ctx.arc(cx, cy, B / PHI, 0, Math.PI * 2); ctx.stroke()
+    ctx.shadowBlur = 0
+  }
+
+  // Center dot
+  const dotA = elementAlpha(bp, 0.80, 0.12)
+  if (dotA > 0.01) {
+    const pulse = 1 + 0.55 * Math.sin(t * 2.2) * dotA
+    ctx.shadowBlur = 26 * dotA
+    ctx.shadowColor = rgba(accent, 0.9)
+    ctx.fillStyle = rgba(accent, dotA * 0.95)
+    ctx.beginPath()
+    ctx.arc(cx, cy, 3.5 * pulse, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.shadowBlur = 0
+  }
+}
+
+// ── VARIANT: GRID (build) — Metatron + circuit-board grid ────────────────────
+
+function drawGridVariant(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  B: number, t: number, spd: number,
+  accent: string, orb: string,
+  bp: number
+): void {
+  // Circuit-board grid — square lattice revealed early
+  const gridA = elementAlpha(bp, 0.04, 0.18) * 0.09
+  if (gridA > 0.003) {
+    const step = B * 0.14
+    const cols = Math.ceil(B * 2 / step) + 2
+    const startX = cx - Math.ceil(cols / 2) * step
+    const startY = cy - Math.ceil(cols / 2) * step
+    ctx.strokeStyle = rgba(accent, gridA)
+    ctx.lineWidth = 0.4
+    ctx.setLineDash([])
+    for (let i = 0; i <= cols; i++) {
+      const x = startX + i * step
+      ctx.beginPath(); ctx.moveTo(x, cy - B * 1.1); ctx.lineTo(x, cy + B * 1.1); ctx.stroke()
+      const y = startY + i * step
+      ctx.beginPath(); ctx.moveTo(cx - B * 1.1, y); ctx.lineTo(cx + B * 1.1, y); ctx.stroke()
+    }
+  }
+
+  // Metatron's Cube — dominant element
+  const metA = elementAlpha(bp, 0.10, 0.22) * 0.14
+  const metReveal = Math.max(0, Math.min(1, (bp - 0.10) / 0.24))
+  const folR = B * 0.25
+  if (metA > 0.003) {
+    drawMetatronLines(ctx, cx, cy, folR, t * 0.014 * spd, '#ffffff', metA, metReveal)
+  }
+
+  // FOL circles under Metatron
+  const folA = elementAlpha(bp, 0.10, 0.18) * 0.18
+  const folReveal = Math.max(0, Math.min(1, (bp - 0.10) / 0.20))
+  if (folA > 0.003) {
+    drawFlowerOfLife(ctx, cx, cy, folR, t * 0.014 * spd, orb, folA, folReveal)
+  }
+
+  // Diamond squares (squares rotated 45°)
+  const diamondA = elementAlpha(bp, 0.36, 0.14)
+  if (diamondA > 0.01) {
+    ctx.shadowBlur = 8
+    ctx.shadowColor = rgba(accent, diamondA * 0.3)
+    const sizes = [B * 0.70, B * 0.48, B * 0.28]
+    sizes.forEach((r, i) => {
+      ctx.strokeStyle = rgba(accent, diamondA * (0.22 - i * 0.05))
+      ctx.lineWidth = 0.7
+      ctx.setLineDash([])
+      drawPolygon(ctx, cx, cy, 4, r, Math.PI / 4 + t * (0.008 + i * 0.004) * spd)
+      ctx.stroke()
+    })
+    ctx.shadowBlur = 0
+  }
+
+  // Outer circle + 12-gon frame
+  const frameA = elementAlpha(bp, 0.48, 0.12)
+  if (frameA > 0.01) {
+    ctx.strokeStyle = rgba(accent, frameA * 0.28)
+    ctx.lineWidth = 0.7
+    ctx.setLineDash([])
+    ctx.beginPath(); ctx.arc(cx, cy, B, 0, Math.PI * 2); ctx.stroke()
+    ctx.strokeStyle = rgba(accent, frameA * 0.20)
+    drawPolygon(ctx, cx, cy, 12, B, t * 0.006 * spd)
+    ctx.stroke()
+  }
+
+  // Node dots at grid intersections near Metatron
+  const nodeA = elementAlpha(bp, 0.58, 0.14)
+  if (nodeA > 0.01) {
+    const nodePositions: [number, number][] = [[cx, cy]]
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2 + t * 0.014 * spd
+      nodePositions.push([cx + folR * Math.cos(angle), cy + folR * Math.sin(angle)])
+    }
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2 + t * 0.014 * spd + Math.PI / 6
+      nodePositions.push([cx + folR * 1.95 * Math.cos(angle), cy + folR * 1.95 * Math.sin(angle)])
+    }
+    ctx.shadowBlur = 6
+    ctx.shadowColor = rgba(accent, 0.6)
+    ctx.fillStyle = rgba(accent, nodeA * 0.7)
+    for (const [nx, ny] of nodePositions) {
+      ctx.beginPath()
+      ctx.arc(nx, ny, 1.8, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    ctx.shadowBlur = 0
+  }
+
+  // Hexagram
+  const hexA = elementAlpha(bp, 0.68, 0.12)
+  if (hexA > 0.01) {
+    ctx.shadowBlur = 16
+    ctx.shadowColor = rgba(accent, hexA * 0.55)
+    ctx.strokeStyle = rgba(accent, hexA * 0.60)
+    ctx.lineWidth = 1.1
+    ctx.setLineDash([])
+    drawPolygon(ctx, cx, cy, 3, B * 0.38, t * 0.016 * spd)
+    ctx.stroke()
+    drawPolygon(ctx, cx, cy, 3, B * 0.38, -t * 0.012 * spd + Math.PI / 3)
+    ctx.stroke()
+    ctx.shadowBlur = 0
+  }
+
+  // Center dot — sharp pulse (gamma energy)
+  const dotA = elementAlpha(bp, 0.80, 0.12)
+  if (dotA > 0.01) {
+    const pulse = 1 + 0.6 * Math.abs(Math.sin(t * 2.6)) * dotA
+    ctx.shadowBlur = 28 * dotA
+    ctx.shadowColor = rgba(accent, 0.95)
+    ctx.fillStyle = rgba(accent, dotA * 0.98)
+    ctx.beginPath()
+    ctx.arc(cx, cy, 3.5 * pulse, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.shadowBlur = 0
+  }
+}
+
+// ── MAIN COMPONENT ───────────────────────────────────────────────────────────
+
 export function Visualizer({
-  bgColor, orbColor, accentColor, particleColor, isPlaying, geometrySpeed = 1.0, onTick
+  bgColor, orbColor, accentColor, particleColor,
+  isPlaying, geometrySpeed = 1.0, geometryVariant = 'triangles', onTick
 }: VisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const timeRef = useRef(0)
@@ -139,13 +730,13 @@ export function Visualizer({
   const particlesRef = useRef<Particle[]>([])
   const rafRef = useRef<number | null>(null)
 
-  // Live refs so animation loop always reads current props
   const bgColorRef = useRef(bgColor)
   const orbColorRef = useRef(orbColor)
   const accentColorRef = useRef(accentColor)
   const particleColorRef = useRef(particleColor)
   const isPlayingRef = useRef(isPlaying)
   const geometrySpeedRef = useRef(geometrySpeed)
+  const geometryVariantRef = useRef(geometryVariant)
   const onTickRef = useRef(onTick)
 
   bgColorRef.current = bgColor
@@ -154,6 +745,7 @@ export function Visualizer({
   particleColorRef.current = particleColor
   isPlayingRef.current = isPlaying
   geometrySpeedRef.current = geometrySpeed
+  geometryVariantRef.current = geometryVariant
   onTickRef.current = onTick
 
   useEffect(() => {
@@ -163,7 +755,6 @@ export function Visualizer({
     const handleResize = (): void => {
       canvas.width = window.innerWidth
       canvas.height = window.innerHeight
-      // Init / reinit particles
       const count = 35 + Math.floor(Math.random() * 20)
       particlesRef.current = Array.from({ length: count }, () => ({
         x: Math.random() * canvas.width,
@@ -186,7 +777,6 @@ export function Visualizer({
       const t = timeRef.current
       const playing = isPlayingRef.current
 
-      // Build progress: grows to 1 over ~18s when playing, decays over 4s when stopped
       const bpSpeed = playing ? 1 / 1080 : -1 / 240
       buildProgressRef.current = Math.max(0, Math.min(1, buildProgressRef.current + bpSpeed))
       const bp = buildProgressRef.current
@@ -202,19 +792,16 @@ export function Visualizer({
       const cy = H / 2
       const base = Math.min(W, H) * 0.36
       const spd = geometrySpeedRef.current
+      const variant = geometryVariantRef.current
 
-      // Gentle breathe when playing
       const breathe = 1 + (playing ? 0.022 * Math.sin(t * 0.65) : 0)
       const B = base * breathe
 
-      // Flower of Life radius (smaller, inner)
-      const folR = base * 0.22
-
-      // ── BACKGROUND ──────────────────────────────────────────────────────
+      // Background
       ctx.fillStyle = bg
       ctx.fillRect(0, 0, W, H)
 
-      // Ambient glow — always present, deepens when playing
+      // Ambient glow
       const glowAlpha = 0.12 + (playing ? 0.18 : 0) * bp
       const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, base * 2.2)
       glow.addColorStop(0, rgba(orb, glowAlpha * 0.55))
@@ -223,7 +810,7 @@ export function Visualizer({
       ctx.fillStyle = glow
       ctx.fillRect(0, 0, W, H)
 
-      // ── PARTICLES ───────────────────────────────────────────────────────
+      // Particles
       particlesRef.current = particlesRef.current.map((p) => {
         p.life -= 1
         if (p.life <= 0) {
@@ -248,127 +835,18 @@ export function Visualizer({
         ctx.fill()
       }
 
-      // ── METATRON'S CUBE ─────────────────────────────────────────────────
-      const metA = elementAlpha(bp, 0.20, 0.18) * 0.07
-      const metReveal = Math.max(0, Math.min(1, (bp - 0.22) / 0.20))
-      if (metA > 0.003) {
-        drawMetatronLines(ctx, cx, cy, folR, t * 0.012 * spd, '#ffffff', metA, metReveal)
-      }
-
-      // ── FLOWER OF LIFE ──────────────────────────────────────────────────
-      const folA = elementAlpha(bp, 0.08, 0.14) * 0.18
-      const folReveal = Math.max(0, Math.min(1, (bp - 0.08) / 0.16))
-      if (folA > 0.003) {
-        drawFlowerOfLife(ctx, cx, cy, folR, t * 0.012 * spd, orb, folA, folReveal)
-      }
-
-      // ── GOLDEN RATIO RINGS ──────────────────────────────────────────────
-      const ringA = elementAlpha(bp, 0.38, 0.14)
-      if (ringA > 0.01) {
-        ctx.shadowBlur = 10
-        ctx.shadowColor = rgba(accent, ringA * 0.35)
-        ;[B, B / PHI, B / (PHI * PHI), B / (PHI * PHI * PHI)].forEach((r, i) => {
-          const a = ringA * (1 - i * 0.18) * 0.38
-          if (a < 0.008) return
-          ctx.strokeStyle = rgba(accent, a)
-          ctx.lineWidth = 0.7 + (i === 0 ? 0.3 : 0)
-          ctx.setLineDash([])
-          ctx.beginPath()
-          ctx.arc(cx, cy, r, 0, Math.PI * 2)
-          ctx.stroke()
-        })
-        ctx.shadowBlur = 0
-      }
-
+      // Dispatch to variant
       ctx.setLineDash([])
-
-      // ── 12-GON (outermost polygon) ──────────────────────────────────────
-      const d12A = elementAlpha(bp, 0.44, 0.13)
-      if (d12A > 0.01) {
-        ctx.shadowBlur = 8
-        ctx.shadowColor = rgba(accent, d12A * 0.25)
-        ctx.strokeStyle = rgba(accent, d12A * 0.30)
-        ctx.lineWidth = 0.8
-        drawPolygon(ctx, cx, cy, 12, B, t * 0.007 * spd)
-        ctx.stroke()
-        ctx.shadowBlur = 0
-      }
-
-      // ── HEXAGRAM (Star of David — two interlocked triangles) ────────────
-      const hexA = elementAlpha(bp, 0.52, 0.14)
-      if (hexA > 0.01) {
-        ctx.shadowBlur = 14
-        ctx.shadowColor = rgba(accent, hexA * 0.5)
-        ctx.strokeStyle = rgba(accent, hexA * 0.55)
-        ctx.lineWidth = 1.1
-        drawPolygon(ctx, cx, cy, 3, B * 0.70, t * 0.014 * spd)
-        ctx.stroke()
-        drawPolygon(ctx, cx, cy, 3, B * 0.70, -t * 0.011 * spd + Math.PI / 3)
-        ctx.stroke()
-        ctx.shadowBlur = 0
-      }
-
-      // ── PENTAGON ────────────────────────────────────────────────────────
-      const pentA = elementAlpha(bp, 0.60, 0.12)
-      if (pentA > 0.01) {
-        ctx.shadowBlur = 10
-        ctx.shadowColor = rgba(accent, pentA * 0.35)
-        ctx.strokeStyle = rgba(accent, pentA * 0.42)
-        ctx.lineWidth = 0.9
-        drawPolygon(ctx, cx, cy, 5, B * 0.53, -t * 0.020 * spd)
-        ctx.stroke()
-        ctx.shadowBlur = 0
-      }
-
-      // ── OCTAGON ─────────────────────────────────────────────────────────
-      const octA = elementAlpha(bp, 0.66, 0.12)
-      if (octA > 0.01) {
-        ctx.shadowBlur = 8
-        ctx.shadowColor = rgba(accent, octA * 0.25)
-        ctx.strokeStyle = rgba(accent, octA * 0.33)
-        ctx.lineWidth = 0.8
-        drawPolygon(ctx, cx, cy, 8, B * 0.40, t * 0.017 * spd)
-        ctx.stroke()
-        ctx.shadowBlur = 0
-      }
-
-      // ── INNER TRIANGLE (brightest, most prominent) ───────────────────────
-      const triA = elementAlpha(bp, 0.73, 0.13)
-      if (triA > 0.01) {
-        ctx.shadowBlur = 18
-        ctx.shadowColor = rgba(accent, triA * 0.7)
-        ctx.strokeStyle = rgba(accent, triA * 0.75)
-        ctx.lineWidth = 1.4
-        drawPolygon(ctx, cx, cy, 3, B * 0.26, t * 0.028 * spd)
-        ctx.stroke()
-        ctx.shadowBlur = 0
-      }
-
-      // ── CENTER GEOMETRY CROSS-LINES ─────────────────────────────────────
-      const crossA = elementAlpha(bp, 0.80, 0.12) * 0.28
-      if (crossA > 0.005) {
-        ctx.strokeStyle = rgba(accent, crossA)
-        ctx.lineWidth = 0.5
-        for (let i = 0; i < 12; i++) {
-          const angle = (i / 12) * Math.PI * 2 + t * 0.006 * spd
-          ctx.beginPath()
-          ctx.moveTo(cx, cy)
-          ctx.lineTo(cx + B * 0.92 * Math.cos(angle), cy + B * 0.92 * Math.sin(angle))
-          ctx.stroke()
-        }
-      }
-
-      // ── CENTER DOT ──────────────────────────────────────────────────────
-      const dotA = elementAlpha(bp, 0.86, 0.12)
-      if (dotA > 0.01) {
-        const pulse = 1 + 0.4 * Math.sin(t * 1.8) * dotA
-        ctx.shadowBlur = 22 * dotA
-        ctx.shadowColor = rgba(accent, 0.9)
-        ctx.fillStyle = rgba(accent, dotA * 0.95)
-        ctx.beginPath()
-        ctx.arc(cx, cy, 3.5 * pulse, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.shadowBlur = 0
+      if (variant === 'triangles') {
+        drawTrianglesVariant(ctx, cx, cy, B, t, spd, accent, orb, bp)
+      } else if (variant === 'circles') {
+        drawCirclesVariant(ctx, cx, cy, B, t, spd, accent, orb, bp)
+      } else if (variant === 'mandala') {
+        drawMandalaVariant(ctx, cx, cy, B, t, spd, accent, orb, bp)
+      } else if (variant === 'crystalline') {
+        drawCrystallineVariant(ctx, cx, cy, B, t, spd, accent, orb, bp)
+      } else if (variant === 'grid') {
+        drawGridVariant(ctx, cx, cy, B, t, spd, accent, orb, bp)
       }
 
       onTickRef.current?.()
@@ -381,7 +859,7 @@ export function Visualizer({
       window.removeEventListener('resize', handleResize)
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
     }
-  }, []) // stable — all props accessed via refs
+  }, [])
 
   return (
     <canvas

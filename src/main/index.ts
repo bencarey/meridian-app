@@ -1,5 +1,8 @@
 import { app, shell, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron'
 import { join } from 'path'
+import { exec } from 'child_process'
+import { writeFileSync, unlinkSync } from 'fs'
+import { tmpdir } from 'os'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 
 // ── TRAY ICON GENERATION ───────────────────────────────────────────────────────
@@ -167,6 +170,65 @@ app.whenReady().then(() => {
   ipcMain.on('hide-window', () => {
     mainWindow?.hide()
     app.dock?.hide()
+  })
+
+  ipcMain.handle('get-next-meeting', async () => {
+    return new Promise<{ title: string; secondsUntil: number } | null>((resolve) => {
+      const script = `tell application "Calendar"
+  set now to current date
+  set cutoff to now + 28800
+  set earliest to missing value
+  set earliestSecs to 0
+  set earliestTitle to ""
+  repeat with c in (every calendar)
+    try
+      set evts to (every event of c whose start date >= now and start date < cutoff)
+      repeat with e in evts
+        set d to start date of e
+        set s to (d - now) as integer
+        if earliest is missing value or s < earliestSecs then
+          set earliest to e
+          set earliestSecs to s
+          set earliestTitle to summary of e
+        end if
+      end repeat
+    end try
+  end repeat
+  if earliest is missing value then
+    return "none"
+  end if
+  return earliestTitle & "|" & (earliestSecs as text)
+end tell`
+
+      const scriptPath = join(tmpdir(), 'meridian-cal.scpt')
+      try {
+        writeFileSync(scriptPath, script, 'utf8')
+      } catch {
+        resolve(null)
+        return
+      }
+
+      const timeout = setTimeout(() => {
+        try { unlinkSync(scriptPath) } catch {}
+        resolve(null)
+      }, 6000)
+
+      exec(`osascript "${scriptPath}"`, (err, stdout) => {
+        clearTimeout(timeout)
+        try { unlinkSync(scriptPath) } catch {}
+        if (err || !stdout || stdout.trim() === 'none') {
+          resolve(null)
+          return
+        }
+        const raw = stdout.trim()
+        const sep = raw.lastIndexOf('|')
+        if (sep === -1) { resolve(null); return }
+        const title = raw.slice(0, sep)
+        const secs = parseInt(raw.slice(sep + 1), 10)
+        if (!title || isNaN(secs) || secs <= 0) { resolve(null); return }
+        resolve({ title, secondsUntil: secs })
+      })
+    })
   })
 
   createWindow()

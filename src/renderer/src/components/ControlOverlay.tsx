@@ -1,5 +1,10 @@
 import { Preset, PresetId, DurationOption, PRESETS, PRESET_ORDER } from '../types/audio'
 
+interface MeetingInfo {
+  title: string
+  secondsUntil: number
+}
+
 interface ControlOverlayProps {
   visible: boolean
   isPlaying: boolean
@@ -7,6 +12,7 @@ interface ControlOverlayProps {
   activeDuration: DurationOption
   volume: number
   secondsRemaining: number | null
+  meetingInfo: MeetingInfo | null
   onPresetChange: (id: PresetId) => void
   onDurationChange: (d: DurationOption) => void
   onTogglePlay: () => void
@@ -29,13 +35,18 @@ function getBrainState(hz: number): { symbol: string; name: string } {
   return { symbol: 'γ', name: 'GAMMA' }
 }
 
+function formatMtgLabel(secondsUntil: number): string {
+  const mins = Math.floor((secondsUntil - 60) / 60)
+  if (mins <= 0) return 'MTG'
+  return `~${mins}m`
+}
+
 const NOISE_LABEL: Record<string, string> = {
   brown: 'BROWN', pink: 'PINK', white: 'WHITE',
 }
 
 const FONT = "'Helvetica Neue', Helvetica, Arial, sans-serif"
 
-// 1px vertical rule between control groups
 function Divider() {
   return (
     <div style={{
@@ -50,7 +61,7 @@ function Divider() {
 
 export function ControlOverlay({
   visible, isPlaying, activePreset, activeDuration, volume,
-  secondsRemaining, onPresetChange, onDurationChange, onTogglePlay, onVolumeChange,
+  secondsRemaining, meetingInfo, onPresetChange, onDurationChange, onTogglePlay, onVolumeChange,
 }: ControlOverlayProps) {
   const accent = activePreset.accentColor
   const brain = getBrainState(activePreset.binauralHz)
@@ -63,6 +74,8 @@ export function ControlOverlay({
     textTransform: 'uppercase',
     userSelect: 'none',
   }
+
+  const meetingActive = activeDuration === 'meeting'
 
   return (
     <div
@@ -93,40 +106,33 @@ export function ControlOverlay({
             padding: '10px 24px 0',
           }}
         >
-          {/* Preset name */}
           <span style={{ ...baseText, fontSize: '10px', color: accent, letterSpacing: '0.20em', fontWeight: 500 }}>
             {activePreset.name}
           </span>
-
           <span style={{ color: 'rgba(255,255,255,0.15)', fontSize: '10px', fontFamily: FONT }}>·</span>
-
-          {/* Brain wave */}
           <span style={{ ...baseText, color: 'rgba(255,255,255,0.50)' }}>
             {brain.symbol}&thinsp;{brain.name}
           </span>
-
           <span style={{ color: 'rgba(255,255,255,0.15)', fontSize: '10px', fontFamily: FONT }}>·</span>
-
-          {/* Binaural beat */}
           <span style={{ ...baseText, color: 'rgba(255,255,255,0.50)' }}>
             {activePreset.binauralHz} Hz binaural
           </span>
-
           <span style={{ color: 'rgba(255,255,255,0.15)', fontSize: '10px', fontFamily: FONT }}>·</span>
-
-          {/* Carrier tones */}
           <span style={{ ...baseText, color: 'rgba(255,255,255,0.35)' }}>
             carrier {activePreset.carrierLeft} / {activePreset.carrierRight} Hz
           </span>
-
           <span style={{ color: 'rgba(255,255,255,0.15)', fontSize: '10px', fontFamily: FONT }}>·</span>
-
-          {/* Noise */}
           <span style={{ ...baseText, color: 'rgba(255,255,255,0.35)' }}>
             {noiseLabel} noise
           </span>
-
-          {/* Timer — right-aligned spacer */}
+          {meetingActive && meetingInfo && (
+            <>
+              <span style={{ color: 'rgba(255,255,255,0.15)', fontSize: '10px', fontFamily: FONT }}>·</span>
+              <span style={{ ...baseText, color: `${accent}bb`, maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {meetingInfo.title}
+              </span>
+            </>
+          )}
           <div style={{ flex: 1 }} />
           {secondsRemaining !== null && (
             <span style={{
@@ -141,8 +147,6 @@ export function ControlOverlay({
             </span>
           )}
         </div>
-
-        {/* Inner divider */}
         <div style={{ height: 1, background: 'rgba(255,255,255,0.05)', margin: '10px 24px 0' }} />
       </div>
 
@@ -185,7 +189,7 @@ export function ControlOverlay({
         <Divider />
 
         {/* Duration selector */}
-        <div style={{ display: 'flex', gap: '2px' }}>
+        <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
           {DURATIONS.map(({ label, value }) => {
             const active = activeDuration === value
             return (
@@ -213,6 +217,33 @@ export function ControlOverlay({
               </button>
             )
           })}
+
+          {/* MTG button — only shown when a meeting is detected */}
+          {meetingInfo && (
+            <button
+              onClick={() => onDurationChange('meeting')}
+              aria-label="Set duration to next meeting"
+              title={meetingInfo.title}
+              style={{
+                ...baseText,
+                fontSize: '10px',
+                letterSpacing: '0.08em',
+                background: meetingActive ? `${accent}18` : 'transparent',
+                border: meetingActive ? `1px solid ${accent}44` : '1px solid transparent',
+                color: meetingActive ? accent : 'rgba(255,255,255,0.28)',
+                padding: '4px 9px',
+                cursor: 'pointer',
+                borderRadius: '2px',
+                transition: 'color 0.25s ease, background 0.25s ease, border-color 0.25s ease',
+                minWidth: '36px',
+                textAlign: 'center',
+                fontWeight: meetingActive ? 500 : 400,
+                marginLeft: '4px',
+              }}
+            >
+              {meetingActive ? formatMtgLabel(meetingInfo.secondsUntil) : 'MTG'}
+            </button>
+          )}
         </div>
 
         <Divider />

@@ -5,6 +5,8 @@ const api = {
   setPlaying: (isPlaying: boolean): void => { ipcRenderer.send('set-playing', isPlaying) },
   hideWindow: (): void => { ipcRenderer.send('hide-window') },
   onStopAudio: (cb: () => void): void => { ipcRenderer.on('stop-audio', cb) },
+  getNextMeeting: (): Promise<{ title: string; secondsUntil: number } | null> =>
+    ipcRenderer.invoke('get-next-meeting'),
 }
 
 if (process.contextIsolated) {

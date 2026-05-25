@@ -7,6 +7,7 @@ declare global {
       setPlaying: (isPlaying: boolean) => void
       hideWindow: () => void
       onStopAudio: (cb: () => void) => void
+      getNextMeeting: () => Promise<{ title: string; secondsUntil: number } | null>
     }
   }
 }

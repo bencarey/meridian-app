@@ -6,6 +6,7 @@ interface AudioEngine {
   start: (preset: Preset, volume: number) => Promise<void>
   stop: () => void
   setVolume: (v: number) => void
+  playChime: () => void
 }
 
 function createReverb(ctx: AudioContext, duration: number, decay: number): ConvolverNode {
@@ -312,5 +313,44 @@ export function useAudioEngine(): AudioEngine {
     }
   }, [])
 
-  return { isPlaying, start, stop, setVolume }
+  // Tibetan singing bowl — fundamental + detuned twin for shimmer + inharmonic partial
+  const playChime = useCallback(() => {
+    const ctx = new AudioContext()
+
+    // Long, spacious reverb for bowl resonance
+    const reverb = createReverb(ctx, 6, 1.4)
+    const reverbGain = ctx.createGain()
+    reverbGain.gain.value = 0.6
+    reverb.connect(reverbGain)
+    reverbGain.connect(ctx.destination)
+
+    // 432 Hz (meditative A) + twin 2.4 Hz apart = slow shimmer beating
+    // 432 × 2.756 = 1190 Hz = characteristic inharmonic partial of a struck bowl
+    const voices = [
+      { freq: 432.0, gain: 0.16, decay: 9.5 },
+      { freq: 434.4, gain: 0.08, decay: 9.0 },  // ~2.4 Hz beat → gentle shimmer
+      { freq: 1190,  gain: 0.05, decay: 6.0 },  // inharmonic 2nd partial
+    ]
+
+    const t0 = ctx.currentTime + 0.05
+    for (const { freq, gain, decay } of voices) {
+      const osc = ctx.createOscillator()
+      const g = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      // Soft mallet-like attack — bowl blooms rather than clicks
+      g.gain.setValueAtTime(0, t0)
+      g.gain.linearRampToValueAtTime(gain, t0 + 0.12)
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + decay)
+      osc.connect(g)
+      g.connect(ctx.destination)
+      g.connect(reverb)
+      osc.start(t0)
+      osc.stop(t0 + decay + 0.1)
+    }
+
+    setTimeout(() => ctx.close(), 14000)
+  }, [])
+
+  return { isPlaying, start, stop, setVolume, playChime }
 }

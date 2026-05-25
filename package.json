@@ -1,10 +1,10 @@
 {
   "name": "meridian-app",
   "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
+  "description": "Focus soundscape app — generative ambient music with sacred geometry visualizer",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "Ben Carey",
+  "homepage": "https://github.com/bencarey/meridian-app",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",

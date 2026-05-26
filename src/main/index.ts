@@ -154,9 +154,6 @@ function createTray(): void {
 }
 
 app.whenReady().then(() => {
-  // Meridian is a menu bar app — never show a Dock icon
-  app.dock?.hide()
-
   electronApp.setAppUserModelId('com.bencarey.meridian')
 
   app.on('browser-window-created', (_, window) => {

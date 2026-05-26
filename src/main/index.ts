@@ -77,7 +77,6 @@ function buildTrayMenu(): Electron.Menu {
       click: () => {
         mainWindow?.show()
         mainWindow?.focus()
-        app.dock?.show()
       },
     },
     { type: 'separator' },
@@ -119,7 +118,6 @@ function createWindow(): void {
       event.preventDefault()
       mainWindow!.webContents.send('stop-audio')
       mainWindow!.hide()
-      app.dock?.hide()
     }
   })
 
@@ -142,19 +140,23 @@ function createTray(): void {
 
   // Left-click toggles the window
   tray.on('click', () => {
-    if (!mainWindow) return
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      createWindow()
+      return
+    }
     if (mainWindow.isVisible() && mainWindow.isFocused()) {
       mainWindow.hide()
-      app.dock?.hide()
     } else {
       mainWindow.show()
       mainWindow.focus()
-      app.dock?.show()
     }
   })
 }
 
 app.whenReady().then(() => {
+  // Meridian is a menu bar app — never show a Dock icon
+  app.dock?.hide()
+
   electronApp.setAppUserModelId('com.bencarey.meridian')
 
   app.on('browser-window-created', (_, window) => {
@@ -169,7 +171,6 @@ app.whenReady().then(() => {
 
   ipcMain.on('hide-window', () => {
     mainWindow?.hide()
-    app.dock?.hide()
   })
 
   ipcMain.handle('get-next-meeting', async () => {
@@ -235,10 +236,9 @@ end tell`
   createTray()
 
   app.on('activate', () => {
-    // Clicking dock icon shows the window
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.show()
-      app.dock?.show()
+      mainWindow.focus()
     } else {
       createWindow()
     }

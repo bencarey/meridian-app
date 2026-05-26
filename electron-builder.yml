@@ -12,7 +12,7 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: meridian-app
+  executableName: meridian
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

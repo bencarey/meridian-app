@@ -1,94 +1,14 @@
-import { app, shell, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron'
+import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { exec } from 'child_process'
 import { writeFileSync, unlinkSync } from 'fs'
 import { tmpdir } from 'os'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 
-// ── TRAY ICON GENERATION ───────────────────────────────────────────────────────
-// Uses inline SVG → base64 data URL → nativeImage. No native deps needed.
-
-function makeTrayIcon(angle: number, playing: boolean): Electron.NativeImage {
-  const S = 32 // @2x for Retina
-  const cx = S / 2
-  const cy = S / 2
-
-  let svgContent: string
-
-  if (!playing) {
-    // Static: thin circle with center dot — the Meridian symbol at rest
-    svgContent = `
-      <circle cx="${cx}" cy="${cy}" r="11" fill="none" stroke="white" stroke-width="1.8"/>
-      <circle cx="${cx}" cy="${cy}" r="2.5" fill="white"/>`
-  } else {
-    // Animated: two counter-rotating triangles (hexagram in motion)
-    const r1 = 11
-    const r2 = 6.5
-    const pts1 = [0, 1, 2].map((i) => {
-      const a = angle + (i / 3) * Math.PI * 2 - Math.PI / 2
-      return `${(cx + r1 * Math.cos(a)).toFixed(2)},${(cy + r1 * Math.sin(a)).toFixed(2)}`
-    }).join(' ')
-    const pts2 = [0, 1, 2].map((i) => {
-      const a = -angle * 0.65 + Math.PI / 6 + (i / 3) * Math.PI * 2 - Math.PI / 2
-      return `${(cx + r2 * Math.cos(a)).toFixed(2)},${(cy + r2 * Math.sin(a)).toFixed(2)}`
-    }).join(' ')
-
-    svgContent = `
-      <polygon points="${pts1}" fill="none" stroke="white" stroke-width="1.6"/>
-      <polygon points="${pts2}" fill="none" stroke="white" stroke-width="1.2"/>
-      <circle cx="${cx}" cy="${cy}" r="1.8" fill="white"/>`
-  }
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">${svgContent}</svg>`
-  const dataUrl = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
-  const img = nativeImage.createFromDataURL(dataUrl)
-  img.setTemplateImage(true) // adapts to light/dark menu bar automatically
-  return img
-}
-
 // ── APP SETUP ─────────────────────────────────────────────────────────────────
 
 let mainWindow: BrowserWindow | null = null
-let tray: Tray | null = null
-let trayAngle = 0
-let trayAnimInterval: ReturnType<typeof setInterval> | null = null
 let forceQuit = false
-
-function startTrayAnimation(): void {
-  if (trayAnimInterval || !tray) return
-  trayAnimInterval = setInterval(() => {
-    trayAngle += 0.055 // one full rotation ~6.5 seconds
-    tray!.setImage(makeTrayIcon(trayAngle, true))
-  }, 50) // 20 fps — smooth enough, not heavy
-}
-
-function stopTrayAnimation(): void {
-  if (trayAnimInterval) {
-    clearInterval(trayAnimInterval)
-    trayAnimInterval = null
-  }
-  tray?.setImage(makeTrayIcon(0, false))
-}
-
-function buildTrayMenu(): Electron.Menu {
-  return Menu.buildFromTemplate([
-    {
-      label: 'Show Meridian',
-      click: () => {
-        mainWindow?.show()
-        mainWindow?.focus()
-      },
-    },
-    { type: 'separator' },
-    {
-      label: 'Quit',
-      click: () => {
-        forceQuit = true
-        app.quit()
-      },
-    },
-  ])
-}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -112,7 +32,7 @@ function createWindow(): void {
     mainWindow!.show()
   })
 
-  // Hide to tray instead of closing on macOS — stop audio first
+  // X button hides the window — audio keeps playing, re-open from Dock
   mainWindow.on('close', (event) => {
     if (!forceQuit && process.platform === 'darwin') {
       event.preventDefault()
@@ -133,26 +53,6 @@ function createWindow(): void {
   }
 }
 
-function createTray(): void {
-  tray = new Tray(makeTrayIcon(0, false))
-  tray.setToolTip('Meridian')
-  tray.setContextMenu(buildTrayMenu())
-
-  // Left-click toggles the window
-  tray.on('click', () => {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      createWindow()
-      return
-    }
-    if (mainWindow.isVisible() && mainWindow.isFocused()) {
-      mainWindow.hide()
-    } else {
-      mainWindow.show()
-      mainWindow.focus()
-    }
-  })
-}
-
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.bencarey.meridian')
 
@@ -161,11 +61,6 @@ app.whenReady().then(() => {
   })
 
   // ── IPC handlers ────────────────────────────────────────────────────────
-  ipcMain.on('set-playing', (_, isPlaying: boolean) => {
-    if (isPlaying) startTrayAnimation()
-    else stopTrayAnimation()
-  })
-
   ipcMain.on('hide-window', () => {
     mainWindow?.hide()
   })
@@ -230,8 +125,8 @@ end tell`
   })
 
   createWindow()
-  createTray()
 
+  // Clicking the Dock icon shows the window
   app.on('activate', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.show()

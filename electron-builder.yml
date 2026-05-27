@@ -22,6 +22,12 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   notarize: false
+  extendInfo:
+    NSCalendarsFullAccessUsageDescription: "Meridian reads your next meeting to set a focus timer countdown."
+
+extraResources:
+  - from: resources/meridian-cal
+    to: meridian-cal
 dmg:
   artifactName: Meridian-${version}.${ext}
   title: Meridian ${version}

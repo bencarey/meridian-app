@@ -143,7 +143,7 @@ function App(): React.JSX.Element {
   const fetchMeeting = useCallback(async () => {
     try {
       const info = await window.api?.getNextMeeting?.()
-      if (info && info.secondsUntil > 120 && info.secondsUntil < 14400) {
+      if (info && info.secondsUntil > 120 && info.secondsUntil < 86400) {
         setMeetingInfo(info)
         setActiveDuration((prev) => prev === 25 ? 'meeting' : prev)
       } else {
@@ -265,6 +265,11 @@ function App(): React.JSX.Element {
     setActiveDuration(d)
     if (d === 'meeting') await fetchMeeting()
   }, [fetchMeeting])
+
+  const handleManualMeeting = useCallback((seconds: number) => {
+    setMeetingInfo({ title: 'Meeting', secondsUntil: seconds })
+    setActiveDuration('meeting')
+  }, [])
 
   const handleTogglePlay = useCallback(async () => {
     if (audio.isPlaying) {

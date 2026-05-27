@@ -218,7 +218,7 @@ export function ControlOverlay({
             )
           })}
 
-          {/* MTG button — only shown when a meeting is detected */}
+          {/* MTG button — shown only when a meeting is auto-detected via EventKit */}
           {meetingInfo && (
             <button
               onClick={() => onDurationChange('meeting')}
